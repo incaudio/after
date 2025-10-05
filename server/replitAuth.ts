@@ -8,7 +8,8 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-if (!process.env.REPLIT_DOMAINS) {
+// Only require REPLIT_DOMAINS if running on Replit
+if (process.env.REPLIT_ENV === "true" && !process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
 

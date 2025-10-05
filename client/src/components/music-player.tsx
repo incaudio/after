@@ -19,12 +19,26 @@ declare global {
 }
 
 export function MusicPlayer({ track, onClose }: MusicPlayerProps) {
+  // Handle direct audio playback for streamUrl
+  useEffect(() => {
+    if (track.streamUrl && audioRef.current) {
+      audioRef.current.volume = volume / 100;
+      if (isPlaying) {
+        audioRef.current.play().catch(() => {});
+      } else {
+        audioRef.current.pause();
+      }
+    }
+    // eslint-disable-next-line
+  }, [track.streamUrl, isPlaying, volume]);
+
   const [isPlaying, setIsPlaying] = useState(true);
   const [volume, setVolume] = useState(70);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const playerRef = useRef<any>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+    const audioRef = useRef<HTMLAudioElement>(null);
 
   const { data: likeStatus } = useQuery<{ isLiked: boolean }>({
     queryKey: [`/api/songs/${track.id}/is-liked`],
@@ -60,71 +74,99 @@ export function MusicPlayer({ track, onClose }: MusicPlayerProps) {
     }
   };
 
+  // YouTube player setup
   useEffect(() => {
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
-    }
-
-    const initPlayer = () => {
-      if (window.YT && window.YT.Player && playerContainerRef.current && track.platform.toLowerCase() === "youtube") {
-        playerRef.current = new window.YT.Player('youtube-player', {
-          videoId: track.id,
-          host: 'https://www.youtube-nocookie.com',
-          playerVars: {
-            autoplay: 1,
-            controls: 0,
-            modestbranding: 1,
-            rel: 0,
-            iv_load_policy: 3,
-            disablekb: 1,
-            fs: 0,
-          },
-          events: {
-            onReady: (event: any) => {
-              setIsPlayerReady(true);
-              event.target.setVolume(volume);
-              event.target.playVideo();
-            },
-            onStateChange: (event: any) => {
-              if (event.data === window.YT.PlayerState.PLAYING) {
-                setIsPlaying(true);
-              } else if (event.data === window.YT.PlayerState.PAUSED) {
-                setIsPlaying(false);
-              }
-            },
-          },
-        });
+    if (track.platform.toLowerCase() === "youtube") {
+      if (!window.YT) {
+        const tag = document.createElement('script');
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag);
       }
-    };
 
-    if (window.YT && window.YT.Player) {
-      initPlayer();
-    } else {
-      window.onYouTubeIframeAPIReady = initPlayer;
-    }
+      const initPlayer = () => {
+        if (window.YT && window.YT.Player && playerContainerRef.current) {
+          playerRef.current = new window.YT.Player('youtube-player', {
+            videoId: track.id,
+            host: 'https://www.youtube-nocookie.com',
+            playerVars: {
+              autoplay: 1,
+              controls: 0,
+              modestbranding: 1,
+              rel: 0,
+              iv_load_policy: 3,
+              disablekb: 1,
+              fs: 0,
+            },
+            events: {
+              onReady: (event: any) => {
+                setIsPlayerReady(true);
+                event.target.setVolume(volume);
+                event.target.playVideo();
+              },
+              onStateChange: (event: any) => {
+                if (event.data === window.YT.PlayerState.PLAYING) {
+                  setIsPlaying(true);
+                } else if (event.data === window.YT.PlayerState.PAUSED) {
+                  setIsPlaying(false);
+                }
+              },
+            },
+          });
+        }
+      };
 
-    return () => {
-      if (playerRef.current && playerRef.current.destroy) {
-        playerRef.current.destroy();
+      if (window.YT && window.YT.Player) {
+        initPlayer();
+      } else {
+        window.onYouTubeIframeAPIReady = initPlayer;
       }
-    };
+
+      return () => {
+        if (playerRef.current && playerRef.current.destroy) {
+          playerRef.current.destroy();
+        }
+      };
+    }
   }, [track.id, track.platform]);
 
+  // YouTube volume
   useEffect(() => {
-    if (playerRef.current && isPlayerReady && playerRef.current.setVolume) {
-      playerRef.current.setVolume(volume);
+    if (track.platform.toLowerCase() === "youtube") {
+      if (playerRef.current && isPlayerReady && playerRef.current.setVolume) {
+        playerRef.current.setVolume(volume);
+      }
     }
-  }, [volume, isPlayerReady]);
+  }, [volume, isPlayerReady, track.platform]);
+
+  // Direct audio playback for streamUrl
+  useEffect(() => {
+    if (track.streamUrl && audioRef.current) {
+      audioRef.current.volume = volume / 100;
+      if (isPlaying) {
+        audioRef.current.play().catch(() => {});
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [track.streamUrl, isPlaying, volume]);
 
   const togglePlay = () => {
-    if (playerRef.current && isPlayerReady) {
+    if (track.platform.toLowerCase() === "youtube") {
+      if (playerRef.current && isPlayerReady) {
+        if (isPlaying) {
+          playerRef.current.pauseVideo();
+        } else {
+          playerRef.current.playVideo();
+        }
+      }
+    } else if (track.streamUrl && audioRef.current) {
       if (isPlaying) {
-        playerRef.current.pauseVideo();
+        audioRef.current.pause();
+        setIsPlaying(false);
       } else {
-        playerRef.current.playVideo();
+        audioRef.current.play().catch(() => {});
+        setIsPlaying(true);
       }
     }
   };
@@ -139,6 +181,17 @@ export function MusicPlayer({ track, onClose }: MusicPlayerProps) {
         <div className="absolute w-0 h-0 overflow-hidden opacity-0">
           <div ref={playerContainerRef} id="youtube-player" />
         </div>
+      )}
+      {track.streamUrl && (
+        <audio
+          ref={audioRef}
+          src={track.streamUrl}
+          autoPlay
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+          style={{ display: 'none' }}
+        />
       )}
 
       <div className="px-6 py-4">
@@ -168,7 +221,6 @@ export function MusicPlayer({ track, onClose }: MusicPlayerProps) {
             >
               <SkipBack className="w-5 h-5" />
             </Button>
-            
             <Button
               size="icon"
               onClick={togglePlay}
@@ -182,7 +234,6 @@ export function MusicPlayer({ track, onClose }: MusicPlayerProps) {
                 <Play className="w-6 h-6 ml-0.5" />
               )}
             </Button>
-
             <Button
               variant="ghost"
               size="icon"

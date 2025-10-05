@@ -10,6 +10,7 @@ export const searchResultSchema = z.object({
   platform: z.string(),
   url: z.string(),
   embedUrl: z.string().optional(),
+  streamUrl: z.string().optional(),
   publishedAt: z.string().optional(),
   viewCount: z.number().optional(),
   description: z.string().optional(),
